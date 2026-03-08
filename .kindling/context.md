@@ -88,7 +88,7 @@ Source tarball → Kaniko (in runner sidecar) → `localhost:5001/<image>` → d
 
 **Dockerfiles found:** 4
 
-**CI workflow:** Not yet generated. Run `kindling generate` to create one.
+**CI workflow:** `.github/workflows/dev-deploy.yml` (GitHub Actions)
 
 
 ## Kaniko Compatibility Notes

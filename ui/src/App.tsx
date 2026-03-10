@@ -47,6 +47,7 @@ interface IntegrationStatus {
   auth0_configured: boolean
   callback_url?: string
   stripe_webhook_configured: boolean
+  stripe_payments_enabled: boolean
   webhook_url?: string
 }
 
@@ -128,6 +129,9 @@ export default function App() {
   // Auth + integrations
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [integrations, setIntegrations] = useState<IntegrationStatus | null>(null)
+
+  // Payments
+  const [payingOrder, setPayingOrder] = useState<number | null>(null)
 
   // Dev tab state
   const [apiMethod, setApiMethod] = useState('GET')
@@ -231,6 +235,7 @@ export default function App() {
           auth0_configured: authData.auth0_configured ?? false,
           callback_url: authData.callback_url,
           stripe_webhook_configured: stripeData.stripe_webhook_configured ?? false,
+          stripe_payments_enabled: stripeData.stripe_payments_enabled ?? false,
           webhook_url: stripeData.webhook_url,
         })
       } catch { /* auth endpoints may not exist yet */ }
@@ -239,6 +244,38 @@ export default function App() {
     const id = setInterval(fetchAuth, 15000)
     return () => clearInterval(id)
   }, [])
+
+  /* ── Payment ─────────────────────────────────────────────────── */
+
+  const payOrder = useCallback(async (orderId: number) => {
+    setPayingOrder(orderId)
+    try {
+      const res = await fetch('/payments/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: orderId, amount: 1000 }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Payment failed')
+      showToast(`Payment ${data.id} succeeded for order #${orderId}`)
+      pushLog('stripe', `PaymentIntent ${data.id} created for order #${orderId} ($${(data.amount / 100).toFixed(2)})`)
+      setActivity((prev) =>
+        [{
+          id: ++nextActivityId,
+          message: `💳 Payment for order #${orderId}: $${(data.amount / 100).toFixed(2)}`,
+          timestamp: new Date(),
+          type: 'order' as const,
+        }, ...prev].slice(0, 50),
+      )
+      // Refresh data so order status updates when webhook fires
+      setTimeout(fetchData, 2000)
+    } catch (err: any) {
+      showToast(err.message || 'Payment failed', 'error')
+      pushLog('stripe', `Payment failed for order #${orderId}: ${err.message}`, 'error')
+    } finally {
+      setPayingOrder(null)
+    }
+  }, [showToast, pushLog, fetchData])
 
   /* ── Order creation ──────────────────────────────────────────── */
 
@@ -417,7 +454,7 @@ export default function App() {
                 ) : (
                   <table>
                     <thead>
-                      <tr><th>#</th><th>Product</th><th>Qty</th><th>Status</th><th>Time</th></tr>
+                      <tr><th>#</th><th>Product</th><th>Qty</th><th>Status</th><th>Time</th>{integrations?.stripe_payments_enabled && <th></th>}</tr>
                     </thead>
                     <tbody>
                       {orders.map((o) => (
@@ -427,6 +464,19 @@ export default function App() {
                           <td className="mono">{o.quantity}</td>
                           <td><span className={`badge ${o.status}`}>{o.status}</span></td>
                           <td className="subtle">{new Date(o.created_at).toLocaleTimeString()}</td>
+                          {integrations?.stripe_payments_enabled && (
+                            <td>
+                              {o.status !== 'paid' && (
+                                <button
+                                  className="pay-btn"
+                                  disabled={payingOrder === o.id}
+                                  onClick={() => payOrder(o.id)}
+                                >
+                                  {payingOrder === o.id ? '…' : '💳 Pay'}
+                                </button>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>

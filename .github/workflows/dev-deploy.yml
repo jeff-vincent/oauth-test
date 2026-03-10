@@ -158,6 +158,11 @@ jobs:
                 secretKeyRef:
                   name: kindling-secret-stripe-webhook-secret
                   key: value
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kindling-secret-stripe-secret-key
+                  key: value
 
       - name: Deploy ui
         uses: kindling-sh/kindling/.github/actions/kindling-deploy@main

@@ -381,6 +381,30 @@ body {
   color: var(--red);
 }
 
+.badge.paid {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.pay-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  border: 1px solid var(--blue, #4f8ff7);
+  background: transparent;
+  color: var(--blue, #4f8ff7);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pay-btn:hover {
+  background: var(--blue, #4f8ff7);
+  color: #fff;
+}
+.pay-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .empty {
   padding: 32px 24px;
   text-align: center;

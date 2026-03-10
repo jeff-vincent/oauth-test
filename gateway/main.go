@@ -82,6 +82,7 @@ func main() {
 	// ── Stripe webhook ────────────────────────────────────────
 	mux.HandleFunc("/webhooks/stripe", handleStripeWebhook)
 	mux.HandleFunc("/stripe/status", handleStripeStatus)
+	mux.HandleFunc("/payments/create", handleCreatePayment)
 
 	log.Println("gateway starting")
 	log.Printf("gateway listening on %s", conf.ListenAddr)

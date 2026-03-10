@@ -127,6 +127,85 @@ func handleStripeStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	respond(w, 200, map[string]interface{}{
 		"stripe_webhook_configured": configured,
+		"stripe_payments_enabled":   conf.StripeSecretKey != "",
 		"webhook_url":               webhookURL,
 	})
+}
+
+// handleCreatePayment creates a Stripe PaymentIntent for a given order.
+// POST /payments/create  { "order_id": 42, "amount": 2000 }
+func handleCreatePayment(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if conf.StripeSecretKey == "" {
+		respond(w, 503, map[string]string{"error": "STRIPE_SECRET_KEY not configured"})
+		return
+	}
+
+	var body struct {
+		OrderID string `json:"order_id"`
+		Amount  int    `json:"amount"` // cents
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		log.Printf("payment decode error: %v", err)
+		respond(w, 400, map[string]string{"error": "invalid request body"})
+		return
+	}
+	if body.Amount <= 0 {
+		body.Amount = 1000 // default $10.00
+	}
+
+	pi, err := createPaymentIntent(body.Amount, body.OrderID)
+	if err != nil {
+		log.Printf("Stripe PaymentIntent error: %v", err)
+		respond(w, 500, map[string]string{"error": err.Error()})
+		return
+	}
+
+	log.Printf("PaymentIntent created: %s (order %s, $%.2f)", pi.ID, body.OrderID, float64(body.Amount)/100)
+	respond(w, 200, map[string]interface{}{
+		"id":     pi.ID,
+		"status": pi.Status,
+		"amount": pi.Amount,
+	})
+}
+
+type paymentIntent struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Amount int    `json:"amount"`
+}
+
+// createPaymentIntent calls the Stripe API directly (no SDK needed).
+func createPaymentIntent(amount int, orderID string) (*paymentIntent, error) {
+	data := fmt.Sprintf(
+		"amount=%d&currency=usd&payment_method=pm_card_visa&confirm=true&automatic_payment_methods[enabled]=true&automatic_payment_methods[allow_redirects]=never&metadata[order_id]=%s",
+		amount, orderID,
+	)
+
+	req, err := http.NewRequest(http.MethodPost, "https://api.stripe.com/v1/payment_intents", strings.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(conf.StripeSecretKey, "")
+
+	resp, err := (&http.Client{Timeout: 15 * time.Second}).Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("stripe API %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var pi paymentIntent
+	if err := json.Unmarshal(respBody, &pi); err != nil {
+		return nil, err
+	}
+	return &pi, nil
 }

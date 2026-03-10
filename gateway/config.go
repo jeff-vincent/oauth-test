@@ -11,6 +11,7 @@ type cfg struct {
 	Auth0ClientSecret   string
 	PublicURL           string
 	SessionSecret       string
+	StripeSecretKey     string
 	StripeWebhookSecret string
 }
 
@@ -24,6 +25,7 @@ func loadConfig() cfg {
 		Auth0ClientSecret:   envOr("AUTH0_CLIENT_SECRET", ""),
 		PublicURL:           envOr("PUBLIC_URL", ""),
 		SessionSecret:       envOr("SESSION_SECRET", ""),
+		StripeSecretKey:     envOr("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret: envOr("STRIPE_WEBHOOK_SECRET", ""),
 	}
 }
